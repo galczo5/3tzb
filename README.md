@@ -24,7 +24,7 @@ npm i
 npm i -g
 ```
 
-** Manual
+## Manual
 ```
 Usage: 3tzb [options] [command]
 
