@@ -1,10 +1,25 @@
 {
-  "name": "tmp",
-  "version": "1.0.0",
-  "main": "index.js",
-  "license": "MIT",
-  "dependencies": {
-    "commander": "^2.19.0",
-    "selenium-webdriver": "^4.0.0-alpha.1"
-  }
+    "name": "3tzb",
+    "description": "",
+    "version": "0.0.1",
+    "main": "3tzb.js",
+    "author": "galczo5 <kamil.galek@gmail.com>",
+    "license": "MIT",
+    "homepage": "https://github.com/galczo5/3tzb",
+    "preferGlobal": true,
+    "bin": {
+        "3tzb": "./3tzb.js"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/galczo5/3tzb.git"
+    },
+    "dependencies": {
+        "commander": "^2.19.0",
+        "selenium-webdriver": "^4.0.0-alpha.1"
+    },
+    "bundledDependencies": [
+        "selenium-webdriver",
+        "commander"
+    ]
 }

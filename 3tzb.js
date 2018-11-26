@@ -1,7 +1,11 @@
+#!/usr/bin/env node
+
 const fs = require('fs');
 const program = require('commander');
-const { Builder, By, Key, until } = require('selenium-webdriver');
+const { Builder, By } = require('selenium-webdriver');
 const chromeDriver = require('selenium-webdriver/chrome');
+
+const auditionListUrl = 'https://www.polskieradio.pl/9,Trojka/30,Audycje';
 
 async function loadPage(url, driver) {
     await driver.get(url);
@@ -10,19 +14,22 @@ async function loadPage(url, driver) {
 
 async function hideRodoShit(driver) {
     await driver.executeScript('$(".rodo-modal").hide()');
-    await driver.sleep(500);
+    await driver.sleep(250);
 }
 
-async function getAuditions(driver) {
-    await loadPage('https://www.polskieradio.pl/9,Trojka/30,Audycje', driver);
+async function getAuditions(driver, filter = null) {
+    await loadPage(auditionListUrl, driver);
     let elements = await driver.findElements(By.css('.article a'));
 
     let result = {};
     for (let i = 0; i < elements.length; i++) {
         let title = await elements[i].getAttribute('title');
-        let href = await elements[i].getAttribute('href');
+
+        if (filter && !title.toLowerCase().includes(filter.toLowerCase()))
+            continue;
+
         result[title] = {
-            url: href,
+            url: await elements[i].getAttribute('href'),
             title: title,
             episodes: []
         };
@@ -31,31 +38,49 @@ async function getAuditions(driver) {
     return Object.values(result);
 }
 
-async function getEpisodes(audition, driver) {
+async function getEpisodes(audition, driver, top = -1) {
     await loadPage(audition.url, driver);
-    let goToNextPage = true;
+    let loadNextPage = true;
     let pagers = await driver.findElements(By.css('.pager-nav .next'));
     let pagersCount = pagers.length;
 
     do {
+        // Find episodes
         let episodes = await driver.findElements(By.css('.article a'));
-        let currentPage = await getPageNo();
-        goToNextPage = await mapEpisodes(episodes);
 
+        if (episodes.length > top)
+            episodes = episodes.slice(0, top);
+
+        top = top - episodes.length;
+        loadNextPage = await mapEpisodes(episodes);
+
+        if (top <= 0 || !loadNextPage)
+            return;
+
+        // Check if there is next page in pager
         let nextBtn = await driver.findElements(By.css('.pager-nav .next a'));
+        if (nextBtn.length === 0 || nextBtn.length !== pagersCount)
+            return;
 
-        if (nextBtn.length === 0 || nextBtn.length !== pagersCount) {
-            goToNextPage = false;
-            continue;
-        }
+        // Go to next page
+        let currentPage = await getPageNo();
+        await navigateToNextPage(nextBtn[nextBtn.length - 1]);
+        loadNextPage = await waitForPageToChange(currentPage);
+    }
+    while(loadNextPage);
 
-        await nextBtn[nextBtn.length - 1].click();
+    // Helper functions
+    async function navigateToNextPage(btn) {
+        await btn.click();
         await driver.sleep(1000);
         await hideRodoShit(driver);
+    }
 
+    async function waitForPageToChange(currentPage) {
         let nextPage = await getPageNo();
         let tryCount = 0;
 
+        // Wait some time for next page
         while (nextPage == currentPage || nextPage == -1) {
             nextPage = await getPageNo();
             await driver.sleep(100);
@@ -63,11 +88,12 @@ async function getEpisodes(audition, driver) {
 
             if (tryCount > 10) {
                 console.log('cannot load page ' + (currentPage + 1) + ' of "' + audition.title + '"');
-                return;
+                return false;
             }
         }
+
+        return true;
     }
-    while(goToNextPage);
 
     async function getPageNo() {
         let pageNoElement = await driver.findElements(By.css('.pager-nav a.active'));
@@ -86,6 +112,9 @@ async function getEpisodes(audition, driver) {
                 files: []
             };
 
+            if (audition.episodes.find(e => e.title === episode.title && e.url == episode.url))
+                return false;
+
             audition.episodes.push(episode);
         }
 
@@ -99,8 +128,7 @@ async function getFiles(episode, driver) {
 
     await driver.get('view-source:' + episode.url);
     let code = await driver.getPageSource();
-    let regex = /source: '[0-9A-Za-z/.\-]*.mp3'/g;
-    let matches = code.match(regex);
+    let matches = code.match(/source: '[0-9A-Za-z/.\-]*.mp3'/g);
 
     if (!matches)
         return;
@@ -108,95 +136,103 @@ async function getFiles(episode, driver) {
     episode.files = matches.map(x => 'http:' + x.replace('source: ', '').replace(/'/g, ''));
 }
 
-program.option('--output <file>', '[required] output file path')
-    .option('--input <file>', 'input file path')
-    .option('--headless', 'use chrome headless')
-    .option('--force');
+program.option('--output <absolute_path>', '[required] output file path')
+    .option('--input <absolute_path>', 'input file path')
+    .option('--headless', 'use chrome in headless mode')
+    .option('--force', 'force override of existing data')
+    .option('--title <title>', 'filter auditions by title')
+    .option('--top <number>', 'get top <number> episodes for each audition');
 
-program.command('get [auditions,episodes,files]')
+program.command('get-auditions')
+    .description('get list of auditions, can be filtered with `--title` option. ' +
+                 'To add audition to existing file use `--input` option')
     .action(async (val, args) => {
-        const options = new chromeDriver.Options();
-        options.addArguments('disable-gpu');
-        options.addArguments('--blink-settings=imagesEnabled=false');
-        options.addArguments("--proxy-server='direct://'");
-        options.addArguments("--proxy-bypass-list=*");
+        let driver = await getChromeDriver(program.headless);
 
-        if (val == 'auditions') {
-            options.addArguments('--disable-javascript');
-            let driver = await new Builder()
-                .forBrowser('chrome')
-                .setChromeOptions(options)
-                .build();
+        let input = [];
+        if (program.input)
+            input = readInput(program.input);
 
-            let result = await getAuditions(driver);
+        let result = await getAuditions(driver, program.title);
 
-            console.log('Auditions found:');
-            result.forEach(a => console.log('- ' + a.title));
-            console.log('--');
-            console.log('Output will be saved in file: ' + program.output);
+        input.forEach(i => {
+            if (!result.find(x => x.title === i.title))
+                result.push(i);
+        });
 
-            fs.writeFileSync(program.output, JSON.stringify(result, null, 2));
-        }
-
-        else if (val == 'episodes') {
-            let driver = await new Builder()
-                .forBrowser('chrome')
-                .setChromeOptions(options)
-                .build();
-
-            let fileString = fs.readFileSync(program.input, 'utf8');
-            let result = JSON.parse(fileString);
-
-            for (let i = 0; i < result.length; i++) {
-                try {
-                    if (program.force)
-                        result[i].episodes = [];
-                    await getEpisodes(result[i], driver);
-                }
-                catch(e) {
-                    console.log('critical error while getting episodes of "' + result[i].title + '"');
-                    console.log(e);
-                }
-            }
-
-            console.log('Episodes found:');
-            result.forEach(a => console.log('- ' + a.title + ' - ' + a.episodes.length + ' episodes'));
-            console.log('Output will be saved in file: ' + program.output);
-
-            fs.writeFileSync(program.output, JSON.stringify(result, null, 2));
-        }
-
-        else if (val == 'files') {
-            options.addArguments('--disable-javascript');
-            let driver = await new Builder()
-                .forBrowser('chrome')
-                .setChromeOptions(options)
-                .build();
-
-            let fileString = fs.readFileSync(program.input, 'utf8');
-            let result = JSON.parse(fileString);
-
-            let fileCount = {};
-            for (let i = 0; i < result.length; i++) {
-                fileCount[result[i].title] = 0;
-                for (let j = 0; j < result[i].episodes.length; j++) {
-                    if (program.force)
-                        result[i].episodes[j].files = [];
-
-                    await getFiles(result[i].episodes[j], driver);
-                    fileCount[result[i].title] += result[i].episodes[j].files.length;
-                }
-            }
-
-            console.log('Files found:');
-            for (let a in fileCount)
-                console.log('- ' + a + ' - ' + fileCount[a] + ' files');
-
-            console.log('Output will be saved in file: ' + program.output);
-
-            fs.writeFileSync(program.output, JSON.stringify(result, null, 2));
-        }
-
+        console.log('Auditions found:');
+        result.forEach(a => console.log('- ' + a.title));
+        saveOutput(result, program.output);
     });
+
+program.command('get-episodes')
+    .description('get episodes for auditions in file')
+    .action(async (val, args) => {
+        let driver = await getChromeDriver(program.headless);
+        let fileString = fs.readFileSync(program.input, 'utf8');
+        let result = readInput(program.input);
+
+        for (let i = 0; i < result.length; i++) {
+            if (program.force)
+                result[i].episodes = [];
+
+            await getEpisodes(result[i], driver, parseInt(program.top));
+        }
+
+        console.log('Episodes found:');
+        result.forEach(a => console.log('- ' + a.title + ' - ' + a.episodes.length + ' episodes'));
+        saveOutput(result, program.output);
+    });
+
+program.command('get-files')
+    .description('get files for auditions in file')
+    .action(async (val, args) => {
+        let driver = await getChromeDriver(program.headless);
+        let result = readInput(program.input);
+
+        let fileCount = {};
+        for (let i = 0; i < result.length; i++) {
+            fileCount[result[i].title] = 0;
+            for (let j = 0; j < result[i].episodes.length; j++) {
+                if (program.force)
+                    result[i].episodes[j].files = [];
+
+                await getFiles(result[i].episodes[j], driver);
+                fileCount[result[i].title] += result[i].episodes[j].files.length;
+            }
+        }
+
+        console.log('Files found:');
+        for (let a in fileCount)
+            console.log('- ' + a + ' - ' + fileCount[a] + ' files');
+
+        saveOutput(result, program.output);
+    });
+
+async function getChromeDriver(headless) {
+    const options = new chromeDriver.Options();
+    options.addArguments('disable-gpu',
+                         '--blink-settings=imagesEnabled=false',
+                         "--proxy-server='direct://'",
+                         "--proxy-bypass-list=*");
+
+    if (headless)
+        options.addArguments('headless');
+
+    return await new Builder()
+        .forBrowser('chrome')
+        .setChromeOptions(options)
+        .build();
+}
+
+function readInput(path) {
+    let fileString = fs.readFileSync(path, 'utf8');
+    return JSON.parse(fileString);
+}
+
+function saveOutput(obj, path) {
+    console.log('Output will be saved in file: ' + path);
+    fs.writeFileSync(path, JSON.stringify(obj, null, 2));
+}
 
 program.parse(process.argv);
