@@ -1,6 +1,6 @@
-* 3tzb - listowanie audycji radiowej "trójki"
+# 3tzb - listowanie audycji radiowej "trójki"
 
-** Opis
+## Opis
 Aplikacja pozwala na automatyczne przejście przez stronę internetową radia i pobranie danych audycji.
 Operacja wykonywana jest w trzech krokach:
 - Pobraniu listy audycji
@@ -9,10 +9,10 @@ Operacja wykonywana jest w trzech krokach:
 
 Dane zapisywane są do pliku `json`.
 
-** Wymagania
+## Wymagania
 Zainstalowany NodeJS oraz Google Chrome.
 
-** Instalacja
+## Instalacja
 Instalacja z uzyciem repozytorium NPM:
 ```
 npm i 3tzb -g
@@ -55,7 +55,7 @@ Przykładowe pobranie listy audycji:
 Przykładowe pobranie listy plików:
 `3tzb.js get-files --input /home/kamil/Dev/3tzb/3tzb.json --output /home/kamil/Dev/3tzb/3tzb.json`
 
-** Znane błędy
+## Znane błędy
 Przejście między stronami na liście odcinków nie działa.
 Błąd występuje dla audycji:
 - 3 wymiary gitary
@@ -66,6 +66,6 @@ Błąd występuje dla audycji:
 - Soul - muzyka duszy
 - Przyciasny beret
 
-** Zgłaszanie błędów
+## Zgłaszanie błędów
 Proszę o zgłaszanie błędów po przez mechanizm "Issues", z uwzględnieniem informacji o nazwie audycji oraz parametrach programu.
 
