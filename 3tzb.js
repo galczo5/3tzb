@@ -141,7 +141,8 @@ program.option('--output <absolute_path>', '[required] output file path')
     .option('--headless', 'use chrome in headless mode')
     .option('--force', 'force override of existing data')
     .option('--title <title>', 'filter auditions by title')
-    .option('--top <number>', 'get top <number> episodes for each audition');
+    .option('--top <number>', 'get top <number> episodes for each audition')
+    .option('--driver-path <absolute_path>', 'define path to Selenium driver manually if not set in PATH environment variable');
 
 program.command('get-auditions')
     .description('get list of auditions, can be filtered with `--title` option. ' +
@@ -218,6 +219,9 @@ async function getChromeDriver(headless) {
 
     if (headless)
         options.addArguments('headless');
+
+    if( program.driverPath )
+        chromeDriver.setDefaultService(new chromeDriver.ServiceBuilder(program.driverPath).build());
 
     return await new Builder()
         .forBrowser('chrome')
