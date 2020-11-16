@@ -29,18 +29,19 @@ npm i -g
 Usage: 3tzb [options] [command]
 
 Options:
-  --output <absolute_path>  [required] output file path
-  --input <absolute_path>   input file path
-  --headless                use chrome in headless mode
-  --force                   force override of existing data
-  --title <title>           filter auditions by title
-  --top <number>            get top <number> episodes for each audition
-  -h, --help                output usage information
+  --output <absolute_path>       [required] output file path
+  --input <absolute_path>        input file path
+  --headless                     use chrome in headless mode
+  --force                        force override of existing data
+  --title <title>                filter auditions by title
+  --top <number>                 get top <number> episodes for each audition
+  --driver-path <absolute_path>  define path to Selenium driver manually if not set in PATH environment variable
+  -h, --help                     output usage information
 
 Commands:
-  get-auditions             get list of auditions, can be filtered with `--title` option. To add audition to existing file use `--input` option
-  get-episodes              get episodes for auditions in file
-  get-files                 get files for auditions in file
+  get-auditions                  get list of auditions, can be filtered with `--title` option. To add audition to existing file use `--input` option
+  get-episodes                   get episodes for auditions in file
+  get-files                      get files for auditions in file
 ```
 
 Przykładowe pobranie listy audycji:
